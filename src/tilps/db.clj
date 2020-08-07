@@ -2,28 +2,8 @@
   (:require [datomic.client.api :as d]
             [java-time :as jt]))
 
-(jt/instant)
-;; config for peer server
 
-
-;; INIT
-;; - create client
-;; - connect to client
-(def db-conn (atom {}))
-(defn init []
-  (let [cfg {:server-type :peer-server
-             :access-key "myaccesskey"
-             :secret "mysecret"
-             :endpoint "localhost:8998"
-             :validate-hostnames false}
-        client (d/client cfg)]
-    (reset! db-conn (d/connect client {:db-name "tilps"}))))
-
-;;(defn send! [data]
-;;(if (nil? @db-conn)
-;;    (throw (Exception. "Datomic database not connected."))
-;;    (d/transact @db-conn {:tx-data data})))
-
+;; schemas
 (def group-schema [{:db/ident :group/title
                     :db/valueType :db.type/string
                     :db/cardinality :db.cardinality/one
@@ -39,23 +19,56 @@
                      :db/cardinality :db.cardinality/one
                      :db/doc "Name of a person"}])
 
-;; tell db about new schema in a transaction with the :tx-data attribute
-;;(send! (concat group-schema person-schema))
+;; basic db functions
+(def *db-conn* (atom {}))
+(defn send! [data]
+  (if (nil? @*db-conn*)
+    (throw (Exception. "Datomic database not connected."))
+    (d/transact @*db-conn* {:tx-data data})))
+
+(defn get-db []
+  (if (nil? @*db-conn*)
+    (throw (Exception. "Datomic database not connected."))
+    (d/db @*db-conn*)))
+
+(defn query [q]
+  (let [db (get-db)]
+    (d/q q db)))
 
 
-;;(defn add-user! [name]
-;;  (send! {:person/name name} ))
+;; write functions
+(defn add-user! [name]
+  (send! [{:person/name name}]))
 
-;; define some data
-(def first-movies [{:movie/title "The Goonies"
-                           :movie/genre "action/adventure"
-                           :movie/release-year 1985}
-                          {:movie/title "Commando"
-                           :movie/genre "action/adventure"
-                           :movie/release-year 1985}
-                          {:movie/title "Repo Man"
-                           :movie/genre "punk dystopia"
-                           :movie/release-year 1984}])
+(defn add-group! [name]
+  (send! [{:group/name name
+          :group/created (jt/instant)}]))
+
+
+;; query functions
+(defn get-users []
+  (query '[:find ?name
+           :where [_ :person/name ?name]]))
+
+(defn test []
+  (add-user! "Lukasa")
+  (add-user! "Annad")
+  (prn (get-users)))
+
+;; INIT
+;; - create client
+;; - connect to client
+;; - send schema
+(defn init []
+  (let [cfg {:server-type :peer-server
+             :access-key "myaccesskey"
+             :secret "mysecret"
+             :endpoint "localhost:8998"
+             :validate-hostnames false}
+        client (d/client cfg)]
+    (reset! *db-conn* (d/connect client {:db-name "tilps"}))
+    (send! (concat group-schema person-schema))
+    (test)))
 
 ;; dispatch data to db in transcation witht he :tx-data attribute
 ;;(d/transact conn {:tx-data first-movies})
@@ -64,7 +77,7 @@
 ;; query data
 
 ;; retrieve current database value, which holds the current state of the database
-;;(def db (d/db @db-conn))
+;;(def db (d/db @*db-conn*))
 
 ;; define a datalog query:
 ;; :find specifies what you want returned, here: logic variable ?e, used in :where
