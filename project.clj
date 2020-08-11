@@ -3,10 +3,12 @@
   :url "http://example.com/FIXME"
   :min-lein-version "2.0.0"
   :exclusions [org.eclipse.jetty/jetty-server]
+  :repositories {"my.datomic.com" {:url "https://my.datomic.com/repo"
+                                   :creds :gpg}}
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [org.eclipse.jetty/jetty-server "9.4.27.v20200227"]
                  [compojure "1.6.2"]
-                 [com.datomic/client-pro "0.9.63"]
+                 [com.datomic/datomic-pro "1.0.6202"]
                  [ring/ring-defaults "0.3.2"]
                  [clojure.java-time "0.3.2"]]
   :plugins [[lein-ring "0.12.5"]]

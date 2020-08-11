@@ -1,7 +1,6 @@
 (ns tilps.db
-  (:require [datomic.client.api :as d]
-            [java-time :as jt]
-            [tilps.db :as db]))
+  (:require [datomic.api :as d]
+            [java-time :as jt]))
 
 ;; schemas
 (defn schema
@@ -42,7 +41,7 @@
 (defn send! [data]
   (if (nil? @*db-conn*)
     (throw (Exception. "Datomic database not connected."))
-    (d/transact @*db-conn* {:tx-data data})))
+    (d/transact @*db-conn* data)))
 
 (defn get-db []
   (if (nil? @*db-conn*)
@@ -81,7 +80,6 @@
            :where [?e :person/name]
                   [?e :person/group]]))
 
-(prn (get-users))
 
 (defn get-users-for-group
   [group]
@@ -91,12 +89,10 @@
        (get-db)
        group))
 
-(get-users-for-group 17592186045520)
-
 ;; test: create test group, add new users to group, query for members of group
 (defn test-db []
-  (add-group! "Testgruppe 2")
-  (let [id (-> (query '[:find ?e :where [?e :group/title "Testgruppe"]])
+  (add-group! "Test Group")
+  (let [id (-> (query '[:find ?e :where [?e :group/title "Test Group"]])
                last first)]
     (add-user! "Paul" id)
     (add-user! "Max" id)
@@ -113,17 +109,11 @@
 ;; - connect to client
 ;; - send schema
 (defn init []
-  (let [cfg {:server-type :peer-server
-             :access-key "myaccesskey"
-             :secret "mysecret"
-             :endpoint "localhost:8998"
-             :validate-hostnames false}
-        client (d/client cfg)]
-    (reset! *db-conn* (d/connect client {:db-name "tilps"}))
+  (let [db-uri "datomic:dev://localhost:4334/test"]
+    (d/create-database db-uri)
+    (reset! *db-conn* (d/connect db-uri))
     (send! (mapcat schemas [group-schema person-schema transaction-schema expense-schema]))
     (test-db)))
-
-
 
 
 
