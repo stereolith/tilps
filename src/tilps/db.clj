@@ -1,23 +1,41 @@
 (ns tilps.db
   (:require [datomic.client.api :as d]
-            [java-time :as jt]))
-
+            [java-time :as jt]
+            [tilps.db :as db]))
 
 ;; schemas
-(def group-schema [{:db/ident :group/title
-                    :db/valueType :db.type/string
-                    :db/cardinality :db.cardinality/one
-                    :db/doc "Title of the group"}
+(defn schema
+  "Build edn schema with less boilerplate"
+  [ident value-type cardinality doc]
+  {:db/ident ident
+   :db/valueType (keyword "db.type" value-type)
+   :db/cardinality (keyword "db.cardinality" cardinality)
+   :db/doc doc})
 
-                   {:db/ident :group/created
-                    :db/valueType :db.type/instant
-                    :db/cardinality :db.cardinality/one
-                    :db/doc "Date the group was created"}])
+(defn schemas
+  "build multiple schemas"
+  [in]
+  (map #(apply schema %) in))
 
-(def person-schema [{:db/ident :person/name
-                     :db/valueType :db.type/string
-                     :db/cardinality :db.cardinality/one
-                     :db/doc "Name of a person"}])
+(def group-schema
+  [[:group/title "string" "one" "Title of the group"]
+   [:group/created "instant" "one" "Date the group was created"]])
+
+(def person-schema
+  [[:person/name "string" "one" "Name of the person"]
+   [:person/group "ref" "many" "Group(s) a person belongs to"]])
+
+(def transaction-schema
+  [[:transaction/title "string" "one" "Title/ description of the transaction"]
+   [:transaction/amount "float" "one" "Amount of the transaction"]
+   [:transaction/sender "ref" "one" "Sender of the transaction"]
+   [:transaction/reciever "ref" "one" "Reciever of the transaction"]])
+
+(def expense-schema
+  [[:expense/title "string" "one" "Title/ description of the expense"]
+   [:expense/amount "float" "one" "Amount of the expense"]
+   [:expense/payer "ref" "one" "Person who paid for the expense"]
+   [:expanse/beneficiary "ref" "many" "Person(s) who benefit from the expense"]])
 
 ;; basic db functions
 (def *db-conn* (atom {}))
@@ -37,24 +55,59 @@
 
 
 ;; write functions
-(defn add-user! [name]
-  (send! [{:person/name name}]))
+(defn add-user! [name group]
+  (send! [{:person/name name
+           :person/group group}]))
 
 (defn add-group! [name]
-  (send! [{:group/name name
-          :group/created (jt/instant)}]))
+  (send! [{:group/title name
+          :group/created (java.util.Date.)}]))
 
+(defn add-transaction! [title amount sender reciever]
+  (send! [{:transaction/title title
+           :transaction/amount amount
+           :transaction/sender sender
+           :transaction/reciever reciever}]))
+
+(defn add-expense! [title amount payer beneficiary]
+  (send! [{:expense/title title
+           :expense/amount amount
+           :expense/sender payer
+           :expense/reciever beneficiary}]))
 
 ;; query functions
 (defn get-users []
-  (query '[:find ?name
-           :where [_ :person/name ?name]]))
+  (query '[:find (pull ?e [:db/id :person/name :person/group])
+           :where [?e :person/name]
+                  [?e :person/group]]))
 
-(defn test []
-  (add-user! "Lukasa")
-  (add-user! "Annad")
-  (prn (get-users)))
+(prn (get-users))
 
+(defn get-users-for-group
+  [group]
+  (d/q '[:find (pull ?e [:db/id :person/name :person/group])
+         :in $ ?group
+         :where [?e :person/group ?group]]
+       (get-db)
+       group))
+
+(get-users-for-group 17592186045520)
+
+;; test: create test group, add new users to group, query for members of group
+(defn test-db []
+  (add-group! "Testgruppe 2")
+  (let [id (-> (query '[:find ?e :where [?e :group/title "Testgruppe"]])
+               last first)]
+    (add-user! "Paul" id)
+    (add-user! "Max" id)
+    (prn id)
+    (d/q '[:find ?name
+           :in $ ?id
+           :where [?e :person/group ?id]
+                  [?e :person/name ?name]]
+         (get-db)
+         id)))
+(test-db)
 ;; INIT
 ;; - create client
 ;; - connect to client
@@ -67,21 +120,13 @@
              :validate-hostnames false}
         client (d/client cfg)]
     (reset! *db-conn* (d/connect client {:db-name "tilps"}))
-    (send! (concat group-schema person-schema))
-    (test)))
-
-;; dispatch data to db in transcation witht he :tx-data attribute
-;;(d/transact conn {:tx-data first-movies})
+    (send! (mapcat schemas [group-schema person-schema transaction-schema expense-schema]))
+    (test-db)))
 
 
-;; query data
 
-;; retrieve current database value, which holds the current state of the database
-;;(def db (d/db @*db-conn*))
 
-;; define a datalog query:
-;; :find specifies what you want returned, here: logic variable ?e, used in :where
-;; :where (list of vectors): "bind the id of each entity that has an attribute called :movie/title to the logic variable named ?e"
+
 (def all-movies-q '[:find ?e
                     :where [?e :movie/title]])
 
