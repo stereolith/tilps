@@ -10,7 +10,8 @@
                  [compojure "1.6.2"]
                  [com.datomic/datomic-pro "1.0.6202"]
                  [ring/ring-defaults "0.3.2"]
-                 [clojure.java-time "0.3.2"]]
+                 [clojure.java-time "0.3.2"]
+                 [mount "0.1.16"]]
   :plugins [[lein-ring "0.12.5"]]
   :ring {:init tilps.core/init
          :handler tilps.handler/app

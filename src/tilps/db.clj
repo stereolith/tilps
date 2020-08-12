@@ -1,6 +1,8 @@
 (ns tilps.db
   (:require [datomic.api :as d]
-            [java-time :as jt]))
+            [java-time :as jt]
+            [mount.core :as mount]
+            [clojure.set :refer [subset?]]))
 
 ;; schemas
 (defn schema
@@ -36,17 +38,25 @@
    [:expense/payer "ref" "one" "Person who paid for the expense"]
    [:expanse/beneficiary "ref" "many" "Person(s) who benefit from the expense"]])
 
+;; db connection
+(defn create-db-conn []
+  (let [db-uri "datomic:dev://localhost:4334/test"]
+    (d/create-database db-uri)
+    (d/connect db-uri)))
+
+(mount/defstate ^{:on-reload :noop} ;; create mount state, prevent restarting state when ns is reloaded
+          db-conn :start (create-db-conn))
+
 ;; basic db functions
-(def *db-conn* (atom {}))
 (defn send! [data]
-  (if (nil? @*db-conn*)
-    (throw (Exception. "Datomic database not connected."))
-    (d/transact @*db-conn* data)))
+  (if (instance? datomic.peer.Connection db-conn)
+    (d/transact db-conn data)
+    (throw (Exception. "Datomic database not connected."))))
 
 (defn get-db []
-  (if (nil? @*db-conn*)
-    (throw (Exception. "Datomic database not connected."))
-    (d/db @*db-conn*)))
+  (if (instance? datomic.peer.Connection db-conn)
+    (d/db db-conn)
+    (throw (Exception. "Datomic database not connected."))))
 
 (defn query [q]
   (let [db (get-db)]
@@ -96,24 +106,23 @@
                last first)]
     (add-user! "Paul" id)
     (add-user! "Max" id)
-    (prn id)
-    (d/q '[:find ?name
-           :in $ ?id
-           :where [?e :person/group ?id]
-                  [?e :person/name ?name]]
-         (get-db)
-         id)))
-(test-db)
+    (let [users-in-group (d/q '[:find ?name
+                                :in $ ?id
+                                :where [?e :person/group ?id]
+                                [?e :person/name ?name]]
+                              (get-db)
+                              id)]
+      (when (not (subset? #{["Paul"] ["Max"]} (set users-in-group)))
+        (throw (Exception. "db test failed"))))))
+
 ;; INIT
 ;; - create client
 ;; - connect to client
 ;; - send schema
 (defn init []
-  (let [db-uri "datomic:dev://localhost:4334/test"]
-    (d/create-database db-uri)
-    (reset! *db-conn* (d/connect db-uri))
-    (send! (mapcat schemas [group-schema person-schema transaction-schema expense-schema]))
-    (test-db)))
+  (mount/start)
+  (send! (mapcat schemas [group-schema person-schema transaction-schema expense-schema]))
+  (test-db))
 
 
 
