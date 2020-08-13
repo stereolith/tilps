@@ -7,6 +7,7 @@
                                    :creds :gpg}}
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [org.eclipse.jetty/jetty-server "9.4.27.v20200227"]
+                 [ring/ring-jetty-adapter "1.8.1"]
                  [compojure "1.6.2"]
                  [com.datomic/datomic-pro "1.0.6202"]
                  [ring/ring-defaults "0.3.2"]
@@ -18,4 +19,5 @@
          :nrepl {:start? true}}
   :profiles
   {:dev {:dependencies [[javax.servlet/servlet-api "2.5"]
-                        [ring/ring-mock "0.4.0"]]}})
+                        [ring/ring-mock "0.4.0"]]
+         :source-paths ["dev/clj"]}})
