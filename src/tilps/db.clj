@@ -20,7 +20,8 @@
 
 (def group-schema
   [[:group/title "string" "one" "Title of the group"]
-   [:group/created "instant" "one" "Date the group was created"]])
+   [:group/created "instant" "one" "Date the group was created"]
+   [:group/transaction "ref" "many" "Transactions the group"]])
 
 (def person-schema
   [[:person/name "string" "one" "Name of the person"]
@@ -30,13 +31,15 @@
   [[:transaction/title "string" "one" "Title/ description of the transaction"]
    [:transaction/amount "float" "one" "Amount of the transaction"]
    [:transaction/sender "ref" "one" "Sender of the transaction"]
-   [:transaction/reciever "ref" "one" "Reciever of the transaction"]])
+   [:transaction/reciever "ref" "one" "Reciever of the transaction"]
+   [:transaction/group "ref" "one" "Group of the transaction"]])
 
 (def expense-schema
   [[:expense/title "string" "one" "Title/ description of the expense"]
    [:expense/amount "float" "one" "Amount of the expense"]
    [:expense/payer "ref" "one" "Person who paid for the expense"]
-   [:expanse/beneficiary "ref" "many" "Person(s) who benefit from the expense"]])
+   [:expanse/beneficiary "ref" "many" "Person(s) who benefit from the expense"]
+   [:expense/group "ref" "one" "Group of the expense"]])
 
 ;; db connection
 (defn create-db-conn []
@@ -72,11 +75,12 @@
   (send! [{:group/title name
           :group/created (java.util.Date.)}]))
 
-(defn add-transaction! [title amount sender reciever]
+(defn add-transaction! [title amount sender reciever group]
   (send! [{:transaction/title title
            :transaction/amount amount
            :transaction/sender sender
-           :transaction/reciever reciever}]))
+           :transaction/reciever reciever
+           :transaction/group group}]))
 
 (defn add-expense! [title amount payer beneficiary]
   (send! [{:expense/title title
@@ -85,11 +89,15 @@
            :expense/reciever beneficiary}]))
 
 ;; query functions
+(defn get-groups []
+  (d/q '[:find (pull ?e [:db/id :group/title :group/created])
+         :where [?e :group/title]]
+       (get-db)))
+
 (defn get-users []
   (query '[:find (pull ?e [:db/id :person/name :person/group])
            :where [?e :person/name]
                   [?e :person/group]]))
-
 
 (defn get-users-for-group
   [group]
@@ -99,54 +107,53 @@
        (get-db)
        group))
 
+(defn get-transactions-for-group
+  [group]
+  (d/q '[:find (pull ?e [:db/id :transaction/title :transaction/amount :transaction/sender :transaction/reciever])
+         :in $ ?group
+         :where [?e :transaction/group ?group]]
+       (get-db)
+       group))
+
+
 ;; test: create test group, add new users to group, query for members of group
 (defn test-db []
   (add-group! "Test Group")
-  (let [id (-> (query '[:find ?e :where [?e :group/title "Test Group"]])
+  (let [gid (-> (query '[:find ?e :where [?e :group/title "Test Group"]])
                last first)]
-    (add-user! "Paul" id)
-    (add-user! "Max" id)
-    (let [users-in-group (d/q '[:find ?name
+    (add-user! "Paul" gid)
+    (add-user! "Max" gid)
+    (let [users-names-in-group (d/q '[:find ?name
                                 :in $ ?id
                                 :where [?e :person/group ?id]
                                 [?e :person/name ?name]]
                               (get-db)
-                              id)]
-      (when (not (subset? #{["Paul"] ["Max"]} (set users-in-group)))
-        (throw (Exception. "db test failed"))))))
+                              gid)]
+      (when (not (subset? #{["Paul"] ["Max"]} (set users-names-in-group)))
+        (throw (Exception. "db test failed"))))
+
+    (add-user! "Ron" gid)
+    (add-user! "Liz" gid)
+    (let [users-in-group (get-users-for-group gid)]
+      (add-transaction!
+       "Test-Transaction"
+       12.49
+       (-> users-in-group first first :db/id)
+       (-> users-in-group second first :db/id)
+       gid)
+      (def transactions (get-transactions-for-group gid))
+      (prn transactions))))
 
 ;; INIT
 ;; - create client
 ;; - connect to client
 ;; - send schema
+
+(defn send-schema []
+  (send! (mapcat schemas [group-schema person-schema transaction-schema expense-schema])))
+
 (defn init []
   (mount/start)
-  (send! (mapcat schemas [group-schema person-schema transaction-schema expense-schema]))
+  (send-schema)
   (test-db))
 
-
-
-(def all-movies-q '[:find ?e
-                    :where [?e :movie/title]])
-
-;; issue query
-;;(d/q all-movies-q db)
-
-(def all-titles-q '[:find ?movie-title
-                    :where [_ :movie/title ?movie-title]])
-;;(d/q all-titles-q db)
-
-;; define query with jouned :where-clauses
-(def titles-from-1985 '[:find ?title
-                        :where [?e :movie/title ?title]
-                               [?e :movie/release-year 1985]])
-
-;;(d/q titles-from-1985 db)
-
-
-(def all-data-from-1985 '[:find ?title ?year ?genre
-                                 :where [?e :movie/title ?title]
-                                        [?e :movie/release-year ?year]
-                                        [?e :movie/genre ?genre]
-                                        [?e :movie/release-year 1985]])
-;;(d/q all-data-from-1985 db)
