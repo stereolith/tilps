@@ -38,12 +38,13 @@
   [[:expense/title "string" "one" "Title/ description of the expense"]
    [:expense/amount "float" "one" "Amount of the expense"]
    [:expense/payer "ref" "one" "Person who paid for the expense"]
-   [:expanse/beneficiary "ref" "many" "Person(s) who benefit from the expense"]
+   [:expense/beneficiary "ref" "many" "Person(s) who benefit from the expense"]
    [:expense/group "ref" "one" "Group of the expense"]])
 
 ;; db connection
 (defn create-db-conn []
   (let [db-uri "datomic:dev://localhost:4334/test"]
+    (d/delete-database db-uri)
     (d/create-database db-uri)
     (d/connect db-uri)))
 
@@ -82,11 +83,12 @@
            :transaction/reciever reciever
            :transaction/group group}]))
 
-(defn add-expense! [title amount payer beneficiary]
+(defn add-expense! [title amount payer beneficiary group]
   (send! [{:expense/title title
            :expense/amount amount
-           :expense/sender payer
-           :expense/reciever beneficiary}]))
+           :expense/payer payer
+           :expense/beneficiary beneficiary
+           :expense/group group}]))
 
 ;; query functions
 (defn get-groups []
@@ -98,6 +100,11 @@
   (query '[:find (pull ?e [:db/id :person/name :person/group])
            :where [?e :person/name]
                   [?e :person/group]]))
+
+(defn get-expenses []
+  (d/q '[:find (pull ?e [:db/id :expense/title :expense/amount :expense/sender :expense/reciever])
+         :where [?e :expense/amount]]
+       (get-db)))
 
 (defn get-users-for-group
   [group]
@@ -115,8 +122,37 @@
        (get-db)
        group))
 
+(defn get-expenses-for-group
+  [group]
+  (d/q '[:find (pull ?e [:db/id :expense/title :expense/amount :expense/sender :expense/reciever])
+         :in $ ?group
+         :where [?e :expense/group ?group]]
+       (get-db)
+       group))
 
-;; test: create test group, add new users to group, query for members of group
+;; tests
+(defn test-transactions [gid]
+  (let [users-in-group (get-users-for-group gid)]
+    (add-transaction!
+     "Test-Transaction"
+     12.49
+     (-> users-in-group first first :db/id)
+     (-> users-in-group second first :db/id)
+     gid)
+    (def transactions (get-transactions-for-group gid))
+    (prn transactions)))
+
+(defn test-expenses [gid]
+  (let [users-in-group (get-users-for-group gid)]
+    (add-expense!
+     "Test-Expense"
+     9.99
+     (-> users-in-group first first :db/id)
+     (-> users-in-group second first :db/id)
+     gid)
+    (def expenses (get-expenses-for-group gid))
+    (prn expenses)))
+
 (defn test-db []
   (add-group! "Test Group")
   (let [gid (-> (query '[:find ?e :where [?e :group/title "Test Group"]])
@@ -134,15 +170,8 @@
 
     (add-user! "Ron" gid)
     (add-user! "Liz" gid)
-    (let [users-in-group (get-users-for-group gid)]
-      (add-transaction!
-       "Test-Transaction"
-       12.49
-       (-> users-in-group first first :db/id)
-       (-> users-in-group second first :db/id)
-       gid)
-      (def transactions (get-transactions-for-group gid))
-      (prn transactions))))
+    (test-transactions gid)
+    (test-expenses gid)))
 
 ;; INIT
 ;; - create client
@@ -157,3 +186,4 @@
   (send-schema)
   (test-db))
 
+(init)
