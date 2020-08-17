@@ -11,6 +11,7 @@
                  [compojure "1.6.2"]
                  [com.datomic/datomic-pro "1.0.6202"]
                  [ring/ring-defaults "0.3.2"]
+                 [ring/ring-json "0.5.0"]
                  [clojure.java-time "0.3.2"]
                  [mount "0.1.16"]]
   :plugins [[lein-ring "0.12.5"]]

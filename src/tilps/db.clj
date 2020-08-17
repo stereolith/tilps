@@ -186,4 +186,3 @@
   (send-schema)
   (test-db))
 
-(init)
