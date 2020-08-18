@@ -8,9 +8,16 @@
 
 (defroutes app-routes
   (GET "/" [] "Hello World")
-  (GET "/users" []
-       (response (map first (db/get-users))))
-  (route/not-found "Not Found"))
+  (context "/api" []
+           (GET "/user" []
+                (response (db/get-user)))
+           (GET "/user/:id" [id]
+                (response (db/get-user (Long. id))))
+           (GET "/group" []
+                (response (db/get-group)))
+           (GET "/group/:id" [id]
+                (response (db/get-group (Long. id))))
+  (route/not-found "Not Found")))
 
 (def app
   (->

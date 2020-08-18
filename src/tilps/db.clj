@@ -62,9 +62,9 @@
     (d/db db-conn)
     (throw (Exception. "Datomic database not connected."))))
 
-(defn query [q]
-  (let [db (get-db)]
-    (d/q q db)))
+(defn query
+  ([q] (map first (d/q q (get-db))))
+  ([q input] (map first (d/q q (get-db) input))))
 
 
 ;; write functions
@@ -91,43 +91,44 @@
            :expense/group group}]))
 
 ;; query functions
-(defn get-groups []
-  (d/q '[:find (pull ?e [:db/id :group/title :group/created])
-         :where [?e :group/title]]
-       (get-db)))
+(defn get-group
+  ([] (query '[:find (pull ?e [:db/id :group/title :group/created])
+           :where [?e :group/title]]
+             ))
+  ([id]
+   (d/pull (get-db) '[:db/id :group/title :group/created] id)))
 
-(defn get-users []
-  (query '[:find (pull ?e [:db/id :person/name :person/group])
-           :where [?e :person/name]
-                  [?e :person/group]]))
+(defn get-user
+  ([]
+   (query '[:find (pull ?e [:db/id :person/name :person/group])
+            :where [?e :person/name]]))
+  ([id]
+   (d/pull (get-db) '[:db/id :person/name :person/group] id)))
+
 
 (defn get-expenses []
-  (d/q '[:find (pull ?e [:db/id :expense/title :expense/amount :expense/sender :expense/reciever])
-         :where [?e :expense/amount]]
-       (get-db)))
+  (query '[:find (pull ?e [:db/id :expense/title :expense/amount :expense/sender :expense/reciever])
+         :where [?e :expense/amount]]))
 
 (defn get-users-for-group
   [group]
-  (d/q '[:find (pull ?e [:db/id :person/name :person/group])
+  (query '[:find (pull ?e [:db/id :person/name :person/group])
          :in $ ?group
          :where [?e :person/group ?group]]
-       (get-db)
        group))
 
 (defn get-transactions-for-group
   [group]
-  (d/q '[:find (pull ?e [:db/id :transaction/title :transaction/amount :transaction/sender :transaction/reciever])
+  (query '[:find (pull ?e [:db/id :transaction/title :transaction/amount :transaction/sender :transaction/reciever])
          :in $ ?group
          :where [?e :transaction/group ?group]]
-       (get-db)
        group))
 
 (defn get-expenses-for-group
   [group]
-  (d/q '[:find (pull ?e [:db/id :expense/title :expense/amount :expense/sender :expense/reciever])
+  (query '[:find (pull ?e [:db/id :expense/title :expense/amount :expense/sender :expense/reciever])
          :in $ ?group
          :where [?e :expense/group ?group]]
-       (get-db)
        group))
 
 ;; tests
@@ -136,8 +137,8 @@
     (add-transaction!
      "Test-Transaction"
      12.49
-     (-> users-in-group first first :db/id)
-     (-> users-in-group second first :db/id)
+     (-> users-in-group first :db/id)
+     (-> users-in-group second :db/id)
      gid)
     (def transactions (get-transactions-for-group gid))
     (prn transactions)))
@@ -147,8 +148,8 @@
     (add-expense!
      "Test-Expense"
      9.99
-     (-> users-in-group first first :db/id)
-     (-> users-in-group second first :db/id)
+     (-> users-in-group first :db/id)
+     (-> users-in-group second :db/id)
      gid)
     (def expenses (get-expenses-for-group gid))
     (prn expenses)))
@@ -156,16 +157,16 @@
 (defn test-db []
   (add-group! "Test Group")
   (let [gid (-> (query '[:find ?e :where [?e :group/title "Test Group"]])
-               last first)]
+               first)]
     (add-user! "Paul" gid)
     (add-user! "Max" gid)
-    (let [users-names-in-group (d/q '[:find ?name
+    (let [users-names-in-group (query '[:find ?name
                                 :in $ ?id
                                 :where [?e :person/group ?id]
                                 [?e :person/name ?name]]
-                              (get-db)
                               gid)]
-      (when (not (subset? #{["Paul"] ["Max"]} (set users-names-in-group)))
+      (prn users-names-in-group)
+      (when (not (subset? #{"Paul" "Max"} (set users-names-in-group)))
         (throw (Exception. "db test failed"))))
 
     (add-user! "Ron" gid)
