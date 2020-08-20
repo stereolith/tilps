@@ -54,7 +54,7 @@
 ;; basic db functions
 (defn send! [data]
   (if (instance? datomic.peer.Connection db-conn)
-    (d/transact db-conn data)
+    @(d/transact db-conn data)
     (throw (Exception. "Datomic database not connected."))))
 
 (defn get-db []
@@ -67,10 +67,10 @@
   ([q input] (map first (d/q q (get-db) input))))
 
 
-;; write functions
+;; write functions (return written entities)
 (defn add-user! [name group]
-  (send! [{:person/name name
-           :person/group group}]))
+  (let [{:keys [db-after tempids]} (send! [{:person/name name :person/group group}])]
+    (d/pull db-after '[:db/id :person/name :person/group] (val (first tempids)))))
 
 (defn add-group! [name]
   (send! [{:group/title name
@@ -119,14 +119,22 @@
 
 (defn get-transactions-for-group
   [group]
-  (query '[:find (pull ?e [:db/id :transaction/title :transaction/amount :transaction/sender :transaction/reciever])
+  (query '[:find (pull ?e [:db/id
+                           :transaction/title
+                           :transaction/amount
+                           {:transaction/sender [:db/id :person/name]}
+                           {:transaction/reciever [:db/id :person/name]}])
          :in $ ?group
          :where [?e :transaction/group ?group]]
        group))
 
 (defn get-expenses-for-group
   [group]
-  (query '[:find (pull ?e [:db/id :expense/title :expense/amount :expense/sender :expense/reciever])
+  (query '[:find (pull ?e [:db/id
+                           :expense/title
+                           :expense/amount
+                           {:expense/payer [:db/id :person/name]}
+                           {:expense/beneficiary [:db/id :person/name]}])
          :in $ ?group
          :where [?e :expense/group ?group]]
        group))
@@ -149,7 +157,7 @@
      "Test-Expense"
      9.99
      (-> users-in-group first :db/id)
-     (-> users-in-group second :db/id)
+     (list (-> users-in-group second :db/id) (-> users-in-group (nth 3) :db/id))
      gid)
     (def expenses (get-expenses-for-group gid))
     (prn expenses)))
