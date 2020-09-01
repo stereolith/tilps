@@ -8,8 +8,10 @@
             [tilps.db :as db]))
 
 (defroutes app-routes
-  (GET "/" [] "Hello World")
+  (-> (route/resources "/")
+      (wrap-defaults site-defaults))
   (context "/api" []
+    (-> (routes
            (GET "/user" []
                 (response (db/get-user)))
            (GET "/user/:id" [id]
@@ -36,11 +38,12 @@
                     (POST "/expense" {:keys [json-params]}
                           (let [{:keys [title amount payer beneficiary]} (keywordize-keys json-params)]
                             (response (db/add-expense! title amount payer beneficiary (Long. id)))))))
+        wrap-json-response
+        wrap-json-params
+        (wrap-defaults api-defaults)))
   (route/not-found "Not Found"))
 
-(def app
-  (->
-   app-routes
-   wrap-json-response
-   wrap-json-params
-   (wrap-defaults api-defaults)))
+(def app app-routes)
+;;   wrap-json-response
+;;   wrap-json-params
+;;   (wrap-defaults api-defaults)))
