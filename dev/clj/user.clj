@@ -11,7 +11,6 @@
 
 (defn ring-start
   []
-
   (reset! server
           (run-jetty app server-opts)))
 

@@ -3,13 +3,16 @@
             [compojure.route :as route]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults site-defaults]]
             [ring.middleware.json :refer [wrap-json-response wrap-json-params]]
-            [ring.util.response :refer [response]]
+            [ring.util.response :refer [response resource-response content-type]]
             [clojure.walk :refer [keywordize-keys]]
             [tilps.db :as db]))
 
 (defroutes app-routes
-  (-> (route/resources "/")
-      (wrap-defaults site-defaults))
+  (-> (routes
+       (GET "/" []
+            (content-type (resource-response "index.html" {:root "public"}) "text/html"))
+       (route/resources "/"))
+       (wrap-defaults site-defaults))
   (context "/api" []
     (-> (routes
            (GET "/user" []
@@ -44,6 +47,3 @@
   (route/not-found "Not Found"))
 
 (def app app-routes)
-;;   wrap-json-response
-;;   wrap-json-params
-;;   (wrap-defaults api-defaults)))

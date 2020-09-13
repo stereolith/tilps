@@ -12,3 +12,5 @@ pom.xml.asc
 .AppleDouble
 .LSOverride
 ._*
+.rebel_readline_history
+resources/public/js
